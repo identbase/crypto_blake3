@@ -1,0 +1,3 @@
+LIBRARY blake3
+EXPORTS
+    blake3
