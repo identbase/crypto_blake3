@@ -5,12 +5,13 @@
 import 'dart:ffi';
 
 /// Internal implementation that is required by the [Blake3Hasher] struct.
+
 class Blake3ChunkState extends Struct {
   @Uint32()
   external int cv;
 
   @Uint64()
-  external double chunkCounter;
+  external int chunkCounter;
 
   @Uint8()
   external int buf;
@@ -25,7 +26,10 @@ class Blake3ChunkState extends Struct {
   external int flags;
 }
 
+
 /// The Blake3 hasher struct that is require.
+// class Blake3Hasher extends Opaque {}
+
 class Blake3Hasher extends Struct {
   @Uint32()
   external int key;
@@ -37,41 +41,38 @@ class Blake3Hasher extends Struct {
 }
 
 
+
 /// The FFI signature of the blake3_hasher_init C fucntion.
-typedef HasherInitFunc = Void Function(
-  Pointer<Blake3Hasher> hasher,
-);
+typedef HasherInitFunc = Void Function(Pointer<Blake3Hasher> hasher);
 
 /// The Dart type definition for calling blake3_hasher_init function.
-typedef HasherInit = void Function(
-  Pointer<Blake3Hasher> hasher,
-);
+typedef HasherInit = void Function(Pointer<Blake3Hasher> hasher);
 
 /// The FFI signature of the blake3_hasher_update C function.
-typedef HasherUpdateFunc = Void Function(
-  Pointer<Blake3Hasher> hasher,
-  Pointer<Void> input,
-  Size length,
-);
+// typedef HasherUpdateFunc = Void Function(
+//   Blake3Hasher hasher,
+//   Pointer<Void> input,
+//   Size length,
+// );
 
 /// The Dart type definition for calling blake3_hasher_update function.
-typedef HasherUpdate = void Function(
-  Pointer<Blake3Hasher> hasher,
-  Pointer<Void> input,
-  Size length,
-);
+// typedef HasherUpdate = void Function(
+//   Pointer<Blake3Hasher> hasher,
+//   Pointer<Void> input,
+//   Size length,
+// );
 
 /// The FFI signature of the blake3_hasher_finalize C function.
-typedef HasherFinalizeFunc = Void Function(
-  Pointer<Blake3Hasher> hasher,
-  Pointer<Void> output,
-  Size length,
-);
+// typedef HasherFinalizeFunc = Void Function(
+//   Pointer<Blake3Hasher> hasher,
+//   Pointer<Uint8> output,
+//   Size length,
+// );
 
 /// The Dart type definition for calling blake3_hasher_finalize function.
-typedef HasherFinalize = void Function(
-  Pointer<Blake3Hasher> hasher,
-  Pointer<Void> output,
-  Size length,
-);
+// typedef HasherFinalize = void Function(
+//   Pointer<Blake3Hasher> hasher,
+//   Pointer<Uint8> output,
+//   Size length,
+// );
 

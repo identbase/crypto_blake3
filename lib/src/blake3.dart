@@ -8,11 +8,14 @@ import 'dart:io' show Platform, Directory;
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import "package:ffi/ffi.dart";
 import 'package:path/path.dart' as path;
-import 'package:typed_data/typed_data.dart';
+// import 'package:typed_data/typed_data.dart';
 
+import 'hash_sink.dart';
 import 'utils.dart';
-import 'types.dart';
+// import 'types.dart';
+import '../bindings/blake3.dart';
 
 
 /// An implementation of the [BLAKE3][blk3] hash function.
@@ -33,164 +36,57 @@ class _Blake3 extends Hash {
 
   @override
   ByteConversionSink startChunkedConversion(Sink<Digest> sink) =>
-      ByteConversionSink.from(_Blake3Sink256(sink));
+      ByteConversionSink.from(_Blake3Sink256(sink, Uint32List.fromList([])));
 }
 
 /// The concrete implementation of [Blake3].
 ///
 /// This is separate so that it can extend [HashSink] without leaking additional
 /// public members
-class _Blake3Sink256 implements Sink<List<int>> {
-  /// The inner sink that this should forward to.
-  Sink<Digest> _sink;
-
+class _Blake3Sink256 extends HashSink {
   /// The dynamic library for [Blake3]
-  late DynamicLibrary _hasher;
-
-  /// Whether the hash function operates on big-endian words.
-  late Endian _endian;
-
-  /// The words in the current chunk.
-  ///
-  /// This is an instance variable to avoid re-allocating, but its data isn't
-  /// used across invocations of [_iterate].
-  late Uint32List _currentChunk;
-
-  /// The length of the input data so far, in bytes.
-  int _lengthInBytes = 0;
-
-  /// Data that has yet to be processed by the hash function.
-  final _pendingData = Uint8Buffer();
-
-  /// Whether [close] has been called.
-  bool _isClosed = false;
+  late DynamicLibrary _dynamicLibrary;
+  late Blake3 _blake3;
+  late Pointer<blake3_hasher> _ptr;
 
   /// The words in the current digest.
+  final Uint32List _digest;
+
   ///
   /// This should be updated each time [updateHash] is called.
-  Uint32List _digest;
-
-  /// The number of signature bytes emitted at the end of the message.
-  ///
-  /// An encrypted message is followed by a signature which depends
-  /// on the encryption algorithm used. This value specifies the
-  /// number of bytes used by this signature. It must always be
-  /// a power of 2 and no less than 8.
-  late int _signatureBytes;
-
   @override
-  void add(List<int> data) {
-    if (_isClosed) throw StateError('Hash.add() called after close().');
-    _lengthInBytes += data.length;
-    _pendingData.addAll(data);
-    _iterate();
-  }
-
-  @override
-  void close() {
-    _finalizeData();
-    _iterate();
-    assert(_pendingData.isEmpty);
-    _sink.add(Digest(_byteDigest()));
-    _sink.close();
-  }
-
-  Uint8List _byteDigest() {
-    if (_endian == Endian.host) return _digest.buffer.asUint8List();
-
-    // Cache the digest locally as `get` could be expensive.
-    final cachedDigest = _digest;
-    final byteDigest = Uint8List(cachedDigest.lengthInBytes);
-    final byteData = byteDigest.buffer.asByteData();
-    for (var i = 0; i < cachedDigest.length; i++) {
-      byteData.setUint32(i * bytesPerWord, cachedDigest[i]);
-    }
-    return byteDigest;
-  }
-
-
-  /// Iterates through [_pendingData], updating the hash computation for each
-  /// chunk.
-  void _iterate() {
-    var pendingDataBytes = _pendingData.buffer.asByteData();
-    var pendingDataChunks = _pendingData.length ~/ _currentChunk.lengthInBytes;
-    for (var i = 0; i < pendingDataChunks; i++) {
-      // Copy words from the pending data buffer into the current chunk buffer.
-      for (var j = 0; j < _currentChunk.length; j++) {
-        _currentChunk[j] = pendingDataBytes.getUint32(
-            i * _currentChunk.lengthInBytes + j * bytesPerWord, _endian);
-      }
-
-      // Run the hash function on the current chunk.
-      updateHash(_currentChunk);
-    }
-
-    // Remove all pending data up to the last clean chunk break.
-    _pendingData.removeRange(
-        0, pendingDataChunks * _currentChunk.lengthInBytes);
-  }
-
-  /// Finalizes [_pendingData].
-  ///
-  /// This adds a 1 bit to the end of the message, and expands it with 0 bits to
-  /// pad it out.
-  void _finalizeData() { }
+  Uint32List get digest => _digest;
 
   /// Runs a single iteration of the hash computation, updating [digest] with
   /// the result.
   ///
   /// [chunk] is the current chunk, whose size is given by the
   /// `chunkSizeInWords` parameter passed to the constructor.
-  void updateHash(Uint32List chunk) { }
+  @override
+  void updateHash(Uint32List chunk) {
 
+  }
 
-  ///
-  late HasherInit _init;
-
-  ///
-  late HasherUpdate _update;
-
-  ///
-  late HasherFinalize _finalize;
-
-
-  _Blake3Sink256(this._sink, this._digest,
-    int chunkSizeInWords,
-    { Endian endian = Endian.big, int signatureBytes = 8 }) {
-
-    _endian = endian;
-    _signatureBytes = signatureBytes;
-    assert(_signatureBytes >= 8);
-    _currentChunk = Uint32List(chunkSizeInWords);
-
+  _Blake3Sink256(Sink<Digest> sink, this._digest): super(sink, 16) {
     var libraryPath =
-        path.join(Directory.current.path, '../blake3_library', 'blake3_avx2_x86-64_windows_gnu.S');
+        path.join(Directory.current.path, 'blake3_library', 'libblake3.dylib');
 
     if (Platform.isMacOS) {
       libraryPath =
-          path.join(Directory.current.path, '../blake3_library', 'blake3_avx2_x86-64_unix.S');
+          path.join(Directory.current.path, 'blake3_library', 'libblake3.dylib');
     }
 
     if (Platform.isWindows) {
       libraryPath = path.join(
-          Directory.current.path, '../blake3_library', 'Debug', 'blake3_avx2_x86-64_windows_msvc.asm');
+          Directory.current.path, 'blake3_library', 'Debug', 'libblake3.dll');
     }
 
-    _hasher = DynamicLibrary.open(libraryPath);
-    _init = _hasher
-      .lookup<NativeFunction<HasherInitFunc>>('blake3_hasher_init')
-      .asFunction();
-    _update = _hasher
-      .lookup<NativeFunction<HasherUpdateFunc>>('blake3_hasher_update')
-      .asFunction();
-    _finalize = _hasher
-      .lookup<NativeFunction<HasherFinalizeFunc>>('blake3_hasher_finalize')
-      .asFunction();
+    _dynamicLibrary = DynamicLibrary.open(libraryPath);
+    _blake3 = new Blake3(_dynamicLibrary);
+    Pointer<blake3_hasher> ptr = calloc();
 
+    _blake3.blake3_hasher_init(ptr);
 
-
+    _ptr = ptr;
   }
 }
-
-
-

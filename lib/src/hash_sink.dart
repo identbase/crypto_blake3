@@ -4,9 +4,9 @@
 
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:typed_data/typed_data.dart';
 
-import 'digest.dart';
 import 'utils.dart';
 
 /// A base class for [Sink] implementations for hash algorithms.

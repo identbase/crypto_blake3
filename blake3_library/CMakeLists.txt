@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.7 FATAL_ERROR)
-project(blake3_library VERSION 1.0.0 LANGUAGES C)
-add_library(blake3_library SHARED blake3.c blake3.def)
-add_executable(blake3_test example.c)
+project(blake3 VERSION 1.0.0 LANGUAGES C)
+add_library(blake3 SHARED blake3.c blake3.def)
 
-set_target_properties(blake3_library PROPERTIES
+set_target_properties(blake3 PROPERTIES
     PUBLIC_HEADER blake3.h
     VERSION ${PROJECT_VERSION}
     SOVERSION 1
